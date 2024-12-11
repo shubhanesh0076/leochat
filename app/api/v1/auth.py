@@ -118,17 +118,17 @@ async def register_user(request: Request, user_registeration: UserRegisteration)
         if "email" in str(dke):
             return JSONResponse(
                 content=get_payload(message="Email already registered, "),
-                status_code=status.HTTP_400_BAD_REQUEST,
+                status_code=status.HTTP_409_CONFLICT,
             )
         elif "mobile_no" in str(dke):
             return JSONResponse(
                 content=get_payload("Mobile number already registered."),
-                status_code=status.HTTP_400_BAD_REQUEST,
+                status_code=status.HTTP_409_CONFLICT,
             )
         else:
             return JSONResponse(
                 content=get_payload("Duplicate entry detected."),
-                status_code=status.HTTP_400_BAD_REQUEST,
+                status_code=status.HTTP_409_CONFLICT,
             )
 
     except Exception as e:
@@ -286,11 +286,9 @@ async def login_with_credentials(
 
     try:
         # Generate a pseudo Device ID using a hash
-        device_info = combined_device_info(
-            request, user_data["email"]
-        )
+        device_info = combined_device_info(request, user_data["email"])
         device_info["is_logged_in"] = True
-        
+
         # Update the device info if `device_id` exists, otherwise push a new entry
         result = await user_collection.update_one(
             {
@@ -457,6 +455,14 @@ def check_duplicate_email(contact_details_ls: list[dict], email: str) -> bool:
     return False
 
 
+# Find account exists or not.
+async def has_account(db, email: str) -> bool:
+    account_cursor = await db["accounts"].find_one({"email": email})
+    if not account_cursor:
+        return False
+    return True
+
+
 @accounts.post("/add-contacts")
 async def add_contact(
     request: Request,
@@ -467,6 +473,9 @@ async def add_contact(
     db = request.app.db
     user_collection = db["accounts"]
     contact_details = contacts_no.model_dump()
+    contact_details["has_account"] = await has_account(db, contact_details.get("email", None))
+    contact_details["added_at"] = datetime.now()
+
     filter = {"email": account_details["email"]}
     _update = {"$push": {"contacts_info": contact_details}}
 

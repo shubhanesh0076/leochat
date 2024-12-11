@@ -4,25 +4,6 @@ from uuid import UUID, uuid4
 from fastapi import UploadFile
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from utils.helpers import validate_email
-# from app.utils.security import hash_password
-
-# from app.utils.security import hash_password
-
-# from app.utils.security import hash_password
-
-# from uuid import UUID
-# from bson import Binary, UuidRepresentation
-
-# # String representation of UUID
-# uuid_str = "12345678-1234-5678-1234-567812345678"
-
-# # Convert the string to a UUID object
-# uuid_obj = UUID(uuid_str)
-
-# # Convert the UUID to BSON Binary for MongoDB storage
-# binary_uuid = Binary.from_uuid(uuid_obj, UuidRepresentation.STANDARD)
-
-# print(binary_uuid)  # This is the BSON Binary format of the UUID
 
 
 class Accounts(BaseModel):
@@ -87,13 +68,15 @@ class Accounts(BaseModel):
                         "name": "",
                         "email": "",
                         "contact_no": "",
-                        "has_account": ""
+                        "has_account": "",
+                        "added_at": ""
                     },
                     {
                         "name": "",
                         "email": "",
                         "contact_no": "",
-                        "has_account": ""
+                        "has_account": "",
+                        "added_at": ""
                     }
                 ]
             }

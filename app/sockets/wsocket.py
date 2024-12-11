@@ -1,28 +1,29 @@
 from fastapi import WebSocket, WebSocketDisconnect, Depends
 from schemas.chat import MessageModel
-from sockets import connection_manager
+from sockets import connection_manager, chat_manager
 from api.dependencies import is_authenticated_user_websocket
-# from sockets import chat_manager
+from utils.helpers import convert_str_to_binary_uuid
 
 
-active_connections: dict[str, set] = dict()
+# active_connections: dict[str, set] = dict()
+
 
 async def chat_websocket_endpoint(
     websocket: WebSocket,
-    room_id: str=None,
-    current_user=Depends(is_authenticated_user_websocket)
+    room_id: str = None,
+    current_user=Depends(is_authenticated_user_websocket),
 ):
     """
     current_user: schemas.User = Depends(get_current_active_user)
     we can't use it because get_current_active_user depends on oauth2_scheme
     which is an instance of OAuth2PasswordBearer.
 
-    OAuth2PasswordBearer does require a Request argument to 
-    extract the token from the request. However, when working with 
-    WebSocket connections, we won't have access to the request object 
+    OAuth2PasswordBearer does require a Request argument to
+    extract the token from the request. However, when working with
+    WebSocket connections, we won't have access to the request object
     in the same way you do with HTTP requests.
 
-    so we have to use another technique to retrieve 
+    so we have to use another technique to retrieve
     current_user more specifically access-token.
 
     Thats why we created a TokenManager to reuse it in http request
@@ -30,31 +31,36 @@ async def chat_websocket_endpoint(
     """
 
     await connection_manager.connect(room_id=room_id, websocket=websocket)
-    # print(f"WebSocket connection established for chat id: .{room_id}")
+    print(f"WebSocket connection established for chat id: .{room_id}")
+
+    # Notify other participants
+    is_converted, binary_room_id = convert_str_to_binary_uuid(room_id)
+    if not is_converted:
+        print("Enter Horrer Message |_-^-_|")
 
     try:
         while True:
-            message = await connection_manager.ws_receive_text(websocket)  
+            # Established the connection and receive the message the from client side.
+            message = await connection_manager.ws_receive_text(websocket)
+
+            # DUMP THE DATA IN JSON.
             message_info = MessageModel.model_validate_json(message).model_dump()
-            message_info["sent_by"]=current_user["user_id"]
-            message_info["sent_to"]=None
-            # await chat_manager.create_message(data)
-            print("DATA: ", message_info)
+            message_info["sent_by"] = current_user.get("user_id", None)
+            message_info["room_id"] = binary_room_id
+            await chat_manager.create_message(data=message_info)
 
-            # # in serialized_message date time is converted to string
-            # serialized_message = {"message": message}
-            # message_serializer(new_message.model_dump())
-            # print('message_response', serialized_message)
-
-            # Broadcast the message to all connected clients
-            # for client_ws in connected_clients[chat_id]:
-            #     print('client_ws', client_ws)
-            #     await client_ws.send_json(serialized_message)
+            # room_info = await chat_manager.get_room(room_id=binary_room_id)
+            message = {
+                "message": message_info["message"],
+                "sent_by": current_user["email"],
+                "sent_at": message_info.get("sent_at").isoformat(),
+            }
+            await connection_manager.broadcast_message(room_id=room_id, message=message)
 
     except WebSocketDisconnect:
         print("WebSocket connection closed.")
         await connection_manager.disconnect(room_id)
-    
+
     except Exception as e:
         print(f"Error****************: {e}")
         await websocket.close(code=1003)
