@@ -1,3 +1,4 @@
+import json
 from fastapi import APIRouter
 from fastapi import Request
 from utils.helpers import generate_room_id, convert_str_to_binary_uuid
@@ -9,6 +10,7 @@ from fastapi import status
 from api.dependencies import is_authenticated_user
 from fastapi import Depends
 from db.db_parser.parser import DBParsers
+from db.redis.redis_connection import Redis
 
 chat_room = APIRouter()
 
@@ -98,24 +100,43 @@ async def create_or_get_room(
 async def chat_list(
     request: Request,
     room_id: str,
-    # account_details=Depends(is_authenticated_user),
+    page: int = 1,
+    size: int = 50,
+    account_details=Depends(is_authenticated_user),
 ):
     collection_name = "chat_room"
     db = request.app.db
 
     _db_parser = DBParsers(db, collection_name=collection_name)
 
+    # Create a unique Redis cache key for the room_id, page, and size
+    cache_key = f"chat_list:{room_id}:page:{page}:size:{size}"
+    redis_instance = await Redis.query_key(key=cache_key)
+
     try:
-        serialized_user_info_result = await _db_parser.get_user_info_result(
-            room_id=room_id
-        )
+        # update the messages unseen to seen.
+        # db['chat_room'].find({})
+
+        if redis_instance is None:
+            serialized_user_info_result = await _db_parser.get_user_info_result(
+                room_id=room_id, page=page, size=size
+            )
+            await Redis.insert_val(
+                key=cache_key, value=json.dumps(serialized_user_info_result)
+            )
+
+        else:
+            serialized_user_info_result = json.loads(redis_instance)
+
         payload = get_payload(
             message="User Messages.", ok=True, details=serialized_user_info_result
         )
         return JSONResponse(content=payload, status_code=status.HTTP_200_OK)
-    
+
     except Exception as e:
+        # print("Error: ", e)
         payload = get_payload(message="An un-expected error Occurse.")
         return JSONResponse(
             content=payload, status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+

@@ -1,7 +1,8 @@
 from uuid import UUID
 
 
-def user_message_info_pipeline(room_id: str):
+def user_message_info_pipeline(room_id: str, page: int = 1, size: int = 50):
+    skip_value = (page - 1) * size
     pipeline = [
         {
             "$lookup": {
@@ -24,6 +25,8 @@ def user_message_info_pipeline(room_id: str):
         },
         {"$unwind": {"path": "$messages_result"}},
         {"$unwind": {"path": "$messages_result.user_info"}},
+        {"$skip": skip_value},
+        {"$limit": size},
         {
             "$project": {
                 "_id": 0,
